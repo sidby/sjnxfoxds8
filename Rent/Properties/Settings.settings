@@ -30,7 +30,7 @@
       <Value Profile="(Default)">агент по;агенство</Value>
     </Setting>
     <Setting Name="UpdateSource" Type="System.String" Scope="User">
-      <Value Profile="(Default)">http://d-hub.net/Progs/Rent/</Value>
+      <Value Profile="(Default)">http://d-hub.net/Progs/UpdateCheck</Value>
     </Setting>
     <Setting Name="ProxyAddress" Type="System.String" Scope="User">
       <Value Profile="(Default)" />

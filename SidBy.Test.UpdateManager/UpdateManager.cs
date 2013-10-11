@@ -18,8 +18,8 @@ namespace SidBy.Test
 
         public void GetReleaseInfo()
         {
-          //  string queryString = "http://d-hub.net/Progs/UpdateCheck";
-            string queryString = "http://localhost:63184/UpdateCheck";
+            string queryString = "http://d-hub.net/Progs/UpdateCheck";
+            // string queryString = "http://localhost:63184/UpdateCheck";
                                     
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(queryString);
             
@@ -52,7 +52,7 @@ namespace SidBy.Test
             using (Stream dataStream = response.GetResponseStream())
             {
                 string html = String.Empty;
-                Debugger.Launch();
+               // Debugger.Launch();
 
                 if (dataStream.CanRead)
                 {

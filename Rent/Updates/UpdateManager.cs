@@ -11,6 +11,10 @@ using Unified;
 using Unified.Network.HTTP;
 using System.Windows.Forms;
 using Rent.Configuration;
+using System.Net;
+using System.Threading;
+using System.Xml.Linq;
+using System.Xml;
 
 namespace Rent.Updates
 {
@@ -69,17 +73,88 @@ namespace Rent.Updates
 
         private static ReleaseInfo DownLoadLatestReleaseInfo(DateTime buildDate)
         {
-            // TODO: Send packet with headers like in fiddler to UpdateCheck.aspx
+            RentUpdates doc = GetLatestVersion();
+          
+            if (doc != null)
+            { 
+                string version = doc.Updates.FirstOrDefault().Version;
 
-           // RssFeed feed = RssFeed.Read(RSS_URL);
-            //if (feed != null)
-            //{
-            //    RssItem newvestRssItem = SelectNewvestRssRssItem(feed, buildDate);
-               // if (newvestRssItem != null)
-                //    return new ReleaseInfo(newvestRssItem.PubDate, newvestRssItem.Title);
-            //}
+                return new ReleaseInfo(DateTime.Now, version);
+            }
 
             return ReleaseInfo.NotAvailable;
+        }
+
+        private static RentUpdates GetLatestVersion()
+        {
+            //Settings.Default.UpdateSource;
+            string queryString = Settings.Default.UpdateSource;
+            // string queryString = "http://localhost:63184/UpdateCheck";
+
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(queryString);
+
+            string appVersion = "1.0.0.0";
+            string OSVersion = Environment.OSVersion.Version.ToString();
+            string envVersion = Environment.Version.ToString();
+            string culture = Thread.CurrentThread.CurrentCulture.Name;
+
+            string bitOSVersion = "WOW64";
+            if (!Environment.Is64BitOperatingSystem)
+                bitOSVersion = "Win32";
+
+            if (Properties.Settings.Default.UseProxy)
+            {
+                request.Proxy = HttpWebRequest.DefaultWebProxy;
+                request.Proxy.Credentials = CredentialCache.DefaultNetworkCredentials;
+                request.PreAuthenticate = true;
+            }
+
+            request.UseDefaultCredentials = true;
+            request.Accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+            request.UserAgent = "Rent/" + appVersion + " (.NET " + envVersion + "; WinNT " + OSVersion + "; " + culture + "; " + bitOSVersion + ")";
+            request.Headers["Accept-Language"] = "ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3";
+            request.Referer = "http://d-hub.net/Progs/Rent/client/" + appVersion;
+
+            using (WebResponse response = request.GetResponse())
+            using (Stream dataStream = response.GetResponseStream())
+            {
+                string data = String.Empty;
+                // Debugger.Launch();
+
+                if (dataStream.CanRead)
+                {
+                    try
+                    {
+                        using (StreamReader sr = new StreamReader(dataStream))
+                        {
+                            data = sr.ReadToEnd();
+
+                            if (!String.IsNullOrEmpty(data))
+                            {
+                                try
+                                {
+                                    return (RentUpdates)Serialize.DeSerializeXML(data.ToString(), typeof(RentUpdates));
+                                }
+                                catch (XmlException ex)
+                                {
+                                    Logging.Log.Error(String.Format("Ошибка парсинга xml документа файла обновлений"), ex);
+                                }
+                            }
+                        }
+                    }
+                    catch (IOException ex)
+                    {
+                        Logging.Log.Error(String.Format("Сайт {0} недоступен. Попробуйте позже", queryString), ex);
+                    }
+                    finally
+                    {
+                        dataStream.Close();
+                        response.Close();
+                    }
+                }
+            }
+
+            return null;
         }
 
         private static void DownloadLatestRelease()
@@ -89,70 +164,65 @@ namespace Rent.Updates
 
             try
             {
-                String url = Settings.Default.UpdateSource;
-                String contents = Web.HTTPAsString(url);
-
-                if (!String.IsNullOrEmpty(contents))
+                RentUpdates updates = GetLatestVersion();
+            
+                if (updates != null)
                 {
-                    RentUpdates updates = (RentUpdates)Serialize.DeSerializeXML(contents, typeof(RentUpdates));
-                    if (updates != null)
+                    String currentMd5 = GetMd5HashFromFile(MainProgramExe);
+                    if (currentMd5 != null)
                     {
-                        String currentMd5 = GetMd5HashFromFile(MainProgramExe);
-                        if (currentMd5 != null)
+                        //get the latest build
+                        System.Data.DataRow row = updates.Tables[0].Rows[0];
+                        String md5 = (row["MD5"] as string);
+                        if (!md5.Equals(currentMd5))
                         {
-                             //get the latest build
-                            System.Data.DataRow row = updates.Tables[0].Rows[0];
-                            String md5 = (row["MD5"] as string);
-                            if (!md5.Equals(currentMd5))
+                            String version = (row["version"] as String);
+                            if (!Directory.Exists("Builds"))
+                                Directory.CreateDirectory("Builds");
+
+                            String finalFolder = @"Builds\" + version;
+                            if (!Directory.Exists(finalFolder))
+                                Directory.CreateDirectory(finalFolder);
+
+                            String filename = String.Format("{0}.zip", version);
+                            filename = @"Builds\" + filename;
+                            Boolean downloaded = true;
+
+                            if (!File.Exists(filename))
+                                downloaded = Web.SaveHTTPToFile((row["Url"] as String), filename);
+
+                            if (downloaded && File.Exists(filename))
                             {
-                                String version = (row["version"] as String);
-                                if (!Directory.Exists("Builds"))
-                                    Directory.CreateDirectory("Builds");
+                                FastZip fz = new FastZip();
+                                fz.ExtractZip(filename, finalFolder, null);
 
-                                String finalFolder = @"Builds\" + version;
-                                if (!Directory.Exists(finalFolder))
-                                    Directory.CreateDirectory(finalFolder);
-
-                                String filename = String.Format("{0}.zip", version);
-                                filename = @"Builds\" + filename;
-                                Boolean downloaded = true;
-
-                                if (!File.Exists(filename))
-                                    downloaded = Web.SaveHTTPToFile((row["Url"] as String), filename);
-
-                                if (downloaded && File.Exists(filename))
+                                if (MessageBox.Show("Доступна новая версия приложения, хотите установить её сейчас?", "Новая версия", MessageBoxButtons.OKCancel) == DialogResult.OK)
                                 {
-                                    FastZip fz = new FastZip();
-                                    fz.ExtractZip(filename, finalFolder, null);
+                                    DirectoryInfo parent = FindFileInFolder(new DirectoryInfo(finalFolder), MainProgramExe);
+                                    if (parent == null)
+                                        return;
 
-                                    if (MessageBox.Show("Доступна новая версия приложения, хотите установить её сейчас?", "Новая версия", MessageBoxButtons.OKCancel) == DialogResult.OK)
+                                    finalFolder = parent.FullName;
+
+                                    File.Copy(FileLocations.CONFIG_FILENAME, Path.Combine(finalFolder, FileLocations.CONFIG_FILENAME), true);
+
+                                    String temp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                                    String updaterExe = Path.Combine(temp, UpdateProgramExe);
+                                    if (File.Exists(Path.Combine(finalFolder, UpdateProgramExe)))
+                                        File.Copy(Path.Combine(finalFolder, UpdateProgramExe), updaterExe, true);
+
+                                    if (File.Exists(updaterExe))
                                     {
-                                        DirectoryInfo parent = FindFileInFolder(new DirectoryInfo(finalFolder), MainProgramExe);
-                                        if (parent == null)
-                                            return;
-
-                                        finalFolder = parent.FullName;
-
-                                        File.Copy(FileLocations.CONFIG_FILENAME, Path.Combine(finalFolder, FileLocations.CONFIG_FILENAME), true);
-
-                                        String temp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                                        String updaterExe = Path.Combine(temp, UpdateProgramExe);
-                                        if (File.Exists(Path.Combine(finalFolder, UpdateProgramExe)))
-                                            File.Copy(Path.Combine(finalFolder, UpdateProgramExe), updaterExe, true);
-
-                                        if (File.Exists(updaterExe))
-                                        {
-                                            //String args = "\"" + finalFolder + "\" \"" + Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) + "\"";
-                                            String args = String.Format("\"{0}\" \"{1}\"", finalFolder, Program.Info.Location);
-                                            System.Diagnostics.Process.Start(updaterExe, args);
-                                            Application.Exit();
-                                        }
+                                        //String args = "\"" + finalFolder + "\" \"" + Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) + "\"";
+                                        String args = String.Format("\"{0}\" \"{1}\"", finalFolder, Program.Info.Location);
+                                        System.Diagnostics.Process.Start(updaterExe, args);
+                                        Application.Exit();
                                     }
-
                                 }
-                            }
 
+                            }
                         }
+
                     }
                 }
             }

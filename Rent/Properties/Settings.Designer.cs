@@ -133,7 +133,7 @@ namespace Rent.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("http://d-hub.net/Progs/Rent/")]
+        [global::System.Configuration.DefaultSettingValueAttribute("http://d-hub.net/Progs/UpdateCheck")]
         public string UpdateSource {
             get {
                 return ((string)(this["UpdateSource"]));

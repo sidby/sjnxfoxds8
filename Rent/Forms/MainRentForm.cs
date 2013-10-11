@@ -362,7 +362,7 @@ namespace Rent
 
         private void CheckForNewRelease()
         {
-            Task<ReleaseInfo> downloadTask = UpdateManager.CheckForUpdates(false);
+            Task<ReleaseInfo> downloadTask = UpdateManager.CheckForUpdates(true);
             downloadTask.ContinueWith(this.CheckForNewRelease, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
@@ -378,7 +378,7 @@ namespace Rent
             {
                 if (downloaded.NewAvailable)
                 {
-                    string newText = String.Format("Доступна новая версия приложения {0}", downloaded.Version);
+                    string newText = String.Format("Доступна новая версия приложения - '{0}'", downloaded.Version);
                     this.toolStripStatusLabel1.Text = newText;
                 }
             }

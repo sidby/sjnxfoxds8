@@ -33,7 +33,7 @@ namespace RentUpdater
 
             string source = Program.Args[0];
             string destination = Program.Args[1];
-
+            
             DirectoryInfo dir = new DirectoryInfo(source);
 
             foreach (FileInfo file in dir.GetFiles())
